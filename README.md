@@ -514,6 +514,77 @@ npm run build
 php artisan test
 ```
 
+### Локальный запуск без VPN
+
+Если production URL Railway недоступен из вашей сети без VPN, проект можно полностью запускать и проверять локально.
+
+Минимальная локальная конфигурация `.env`:
+
+```env
+APP_URL=http://127.0.0.1:8000
+FRONTEND_URL=http://127.0.0.1:8000
+
+MAIL_MAILER=log
+OWNER_EMAIL=owner@example.com
+
+AI_PROVIDER=gemini
+AI_API_KEY=
+AI_MODEL=gemini-3.5-flash-lite
+AI_TIMEOUT=10
+```
+
+Что это даёт:
+
+- frontend будет открываться локально на `/`;
+- `POST /api/contact` будет работать;
+- при пустом `AI_API_KEY` backend автоматически уйдёт в fallback и не сломает отправку;
+- при `MAIL_MAILER=log` письма не отправляются во внешний SMTP, а записываются в лог, что удобно для локальной проверки без VPN и без SMTP-доступа.
+
+Порядок локального запуска:
+
+1. Установить зависимости:
+
+```bash
+composer install
+npm install
+```
+
+2. Создать `.env` из примера и сгенерировать ключ:
+
+```bash
+copy .env.example .env
+php artisan key:generate
+```
+
+3. Запустить backend:
+
+```bash
+php artisan serve
+```
+
+4. В отдельном терминале запустить frontend:
+
+```bash
+npm run dev
+```
+
+После этого локально будут доступны:
+
+- `http://127.0.0.1:8000/`
+- `http://127.0.0.1:8000/api/health`
+- `http://127.0.0.1:8000/api/metrics`
+- `http://127.0.0.1:8000/api/documentation`
+- `http://127.0.0.1:8000/api/openapi.json`
+
+Если нужен режим без Vite dev server, можно собрать frontend и оставить только Laravel:
+
+```bash
+npm run build
+php artisan serve
+```
+
+В этом случае корневая страница тоже будет работать локально через собранные assets из `public/build`.
+
 ## Тесты
 
 Сейчас покрыты:
