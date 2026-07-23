@@ -4,37 +4,21 @@ declare(strict_types=1);
 
 namespace Tests\Feature\Api;
 
+use App\Mail\ContactOwnerMail;
+use App\Mail\ContactUserMail;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
+use RuntimeException;
 use Tests\TestCase;
 
 final class ContactTest extends TestCase
 {
     public function test_it_creates_a_contact_request(): void
     {
-        config([
-            'services.ai.provider' => 'openai',
-            'services.ai.api_key' => 'test-key',
-            'services.ai.model' => 'gpt-4.1-mini',
-            'services.ai.timeout' => 10,
-        ]);
-
-        Http::fake([
-            'https://api.openai.com/v1/chat/completions' => Http::response([
-                'choices' => [
-                    [
-                        'message' => [
-                            'content' => json_encode([
-                                'category' => 'project_request',
-                                'sentiment' => 'positive',
-                                'priority' => 'high',
-                                'summary' => 'Клиент хочет обсудить разработку интернет-магазина.',
-                            ], JSON_UNESCAPED_UNICODE),
-                        ],
-                    ],
-                ],
-            ]),
-        ]);
+        $this->configureAi();
+        $this->fakeSuccessfulAiResponse();
+        Mail::fake();
 
         $response = $this->postJson('/api/contact', [
             'name' => 'Никита',
@@ -59,6 +43,48 @@ final class ContactTest extends TestCase
         Http::assertSent(function (Request $request): bool {
             return $request->url() === 'https://api.openai.com/v1/chat/completions'
                 && $request->hasHeader('Authorization', ['Bearer test-key']);
+        });
+
+        Mail::assertSent(ContactOwnerMail::class, 1);
+        Mail::assertSent(ContactUserMail::class, 1);
+    }
+
+    public function test_it_sends_a_mail_to_the_owner(): void
+    {
+        $this->configureAi();
+        $this->fakeSuccessfulAiResponse();
+        Mail::fake();
+
+        $this->postJson('/api/contact', [
+            'name' => 'Никита',
+            'phone' => '+79999999999',
+            'email' => 'nikita@example.com',
+            'comment' => 'Хочу обсудить разработку интернет-магазина.',
+        ])->assertCreated();
+
+        Mail::assertSent(ContactOwnerMail::class, function (ContactOwnerMail $mail): bool {
+            return $mail->hasTo('owner@example.com')
+                && $mail->contactData->email === 'nikita@example.com'
+                && $mail->analysisResult->processedByAi;
+        });
+    }
+
+    public function test_it_sends_a_mail_to_the_user(): void
+    {
+        $this->configureAi();
+        $this->fakeSuccessfulAiResponse();
+        Mail::fake();
+
+        $this->postJson('/api/contact', [
+            'name' => 'Никита',
+            'phone' => '+79999999999',
+            'email' => 'nikita@example.com',
+            'comment' => 'Хочу обсудить разработку интернет-магазина.',
+        ])->assertCreated();
+
+        Mail::assertSent(ContactUserMail::class, function (ContactUserMail $mail): bool {
+            return $mail->hasTo('nikita@example.com')
+                && $mail->contactData->name === 'Никита';
         });
     }
 
@@ -130,12 +156,8 @@ final class ContactTest extends TestCase
 
     public function test_it_uses_fallback_when_ai_returns_invalid_json(): void
     {
-        config([
-            'services.ai.provider' => 'openai',
-            'services.ai.api_key' => 'test-key',
-            'services.ai.model' => 'gpt-4.1-mini',
-            'services.ai.timeout' => 10,
-        ]);
+        $this->configureAi();
+        Mail::fake();
 
         Http::fake([
             'https://api.openai.com/v1/chat/completions' => Http::response([
@@ -168,5 +190,73 @@ final class ContactTest extends TestCase
                     'processed_by_ai' => false,
                 ],
             ]);
+
+        Mail::assertSent(ContactOwnerMail::class, function (ContactOwnerMail $mail): bool {
+            return $mail->analysisResult->processedByAi === false;
+        });
+    }
+
+    public function test_it_returns_service_unavailable_when_mail_delivery_fails(): void
+    {
+        $this->configureAi();
+        $this->fakeSuccessfulAiResponse();
+
+        Mail::swap(new class
+        {
+            public function to(mixed $users): self
+            {
+                return $this;
+            }
+
+            public function send(mixed $mailable): void
+            {
+                throw new RuntimeException('SMTP failure');
+            }
+        });
+
+        $response = $this->postJson('/api/contact', [
+            'name' => 'Никита',
+            'phone' => '+79999999999',
+            'email' => 'nikita@example.com',
+            'comment' => 'Хочу обсудить разработку интернет-магазина.',
+        ]);
+
+        $response
+            ->assertStatus(503)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Сервис отправки сообщений временно недоступен.',
+            ]);
+    }
+
+    private function configureAi(): void
+    {
+        config([
+            'contact.owner_email' => 'owner@example.com',
+            'services.ai.provider' => 'openai',
+            'services.ai.api_key' => 'test-key',
+            'services.ai.model' => 'gpt-4.1-mini',
+            'services.ai.timeout' => 10,
+        ]);
+    }
+
+    private function fakeSuccessfulAiResponse(): void
+    {
+        Http::fake([
+            'https://api.openai.com/v1/chat/completions' => Http::response([
+                'choices' => [
+                    [
+                        'message' => [
+                            'content' => json_encode([
+                                'category' => 'project_request',
+                                'sentiment' => 'positive',
+                                'priority' => 'high',
+                                'summary' => 'Клиент хочет обсудить разработку интернет-магазина.',
+                            ], JSON_UNESCAPED_UNICODE),
+                        ],
+                    ],
+                ],
+            ]),
+        ]);
     }
 }
