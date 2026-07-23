@@ -1,6 +1,6 @@
 # Contact AI API
 
-Backend API для формы обратной связи на Laravel.
+Laravel API для формы обратной связи с дополнительным Vue frontend на корневой странице `/`.
 
 Текущий статус репозитория:
 
@@ -16,6 +16,7 @@ Backend API для формы обратной связи на Laravel.
 - реализованы `GET /api/health` и `GET /api/metrics`;
 - метрики хранятся в JSON-файле с блокировкой записи;
 - добавлены OpenAPI JSON и Swagger UI documentation page;
+- добавлен Vue 3 frontend для ручной отправки формы, просмотра health и metrics;
 - написаны feature-тесты для валидации, AI, почты, rate limiting, CORS, health, metrics и документации.
 
 Пока не реализованы:
@@ -26,6 +27,8 @@ Backend API для формы обратной связи на Laravel.
 
 - PHP `^8.3` по текущему `composer.json`
 - Laravel `^13.8` по текущему `composer.json`
+- Vue `^3.5`
+- Vite `^7`
 - Laravel HTTP Client
 - Laravel Mail
 - PHPUnit
@@ -59,9 +62,25 @@ Route
 - `GET /api/openapi.json`
 - `GET /api/documentation`
 
+Frontend:
+
+- `GET /` отдаёт Vue-приложение с формой обратной связи;
+- Vue UI работает поверх уже существующего API и не меняет публичный JSON-контракт backend.
+
 Контроллеры остаются тонкими: принимают запрос, вызывают нужный сервис и возвращают JSON или view.
 
 ## Endpoints
+
+### `GET /`
+
+Корневая страница отдаёт Vue frontend, который:
+
+- отправляет форму в `POST /api/contact`;
+- показывает состояние `GET /api/health`;
+- показывает текущие значения `GET /api/metrics`;
+- содержит быстрые ссылки на `/api/documentation` и `/api/openapi.json`.
+
+Если Vite manifest ещё не собран и dev-server не запущен, корневая страница выводит fallback-заглушку с ссылками на API и документацию вместо падения по `ViteManifestNotFoundException`.
 
 ### `POST /api/contact`
 
@@ -198,6 +217,27 @@ curl http://localhost/api/metrics
 ```bash
 curl http://localhost/api/openapi.json
 ```
+
+## Frontend
+
+Frontend специально сделан простым: один Vue-компонент без роутера и без state manager. Это соответствует исходной задаче, где frontend не требовался, но даёт рабочую демонстрационную страницу для ручной проверки backend.
+
+Что делает интерфейс:
+
+- собирает `name`, `phone`, `email`, `comment`;
+- показывает полевые ошибки `422`;
+- показывает результат AI-анализа после успешной отправки;
+- подтягивает `health` и `metrics` при загрузке страницы;
+- позволяет быстро проверить документацию и OpenAPI.
+
+Технически фронт находится в:
+
+- `resources/js/components/ContactFrontApp.vue`
+- `resources/js/app.js`
+- `resources/css/app.css`
+- `resources/views/welcome.blade.php`
+
+Примечание: этот Vue frontend является расширением поверх исходного backend-only задания из `TASK.md`.
 
 ## Swagger / OpenAPI
 
@@ -396,6 +436,11 @@ FRONTEND_URL=http://localhost:3000
 
 Новых переменных для Swagger/OpenAPI не требуется.
 
+Для локальной ручной проверки Vue UI обычно достаточно:
+
+- `APP_URL=http://127.0.0.1:8000`
+- `FRONTEND_URL=http://127.0.0.1:8000`
+
 Примечание: текущий Laravel-конфиг использует `MAIL_SCHEME`, но для совместимости с заданием в конфигурации также поддержан `MAIL_ENCRYPTION`.
 
 ## Установка и запуск
@@ -404,6 +449,7 @@ FRONTEND_URL=http://localhost:3000
 
 ```bash
 composer install
+npm install
 ```
 
 2. Создать `.env`:
@@ -420,7 +466,20 @@ php artisan key:generate
 
 4. Настроить `OWNER_EMAIL`, почтовые параметры, AI-переменные и `FRONTEND_URL` в `.env`.
 
-5. Запустить тесты:
+5. Для локальной разработки frontend запустить два процесса:
+
+```bash
+php artisan serve
+npm run dev
+```
+
+6. Для production-сборки frontend:
+
+```bash
+npm run build
+```
+
+7. Запустить тесты:
 
 ```bash
 php artisan test
@@ -475,6 +534,7 @@ php artisan test
 
 - базовая структура endpoint;
 - DTO, сервисы, middleware, mailables и документация;
+- Vue-страница формы обратной связи;
 - тестовые сценарии;
 - черновая версия README и OpenAPI spec.
 
@@ -483,7 +543,8 @@ php artisan test
 - генерация структуры Laravel API для contact form;
 - построение AI-интеграции с fallback;
 - подготовка тестов для AI, почты, rate limiting, health и metrics;
-- подготовка OpenAPI/Swagger-документации и curl-примеров.
+- подготовка OpenAPI/Swagger-документации и curl-примеров;
+- сборка демонстрационного Vue frontend поверх готового API.
 
 Проверялось и исправлялось вручную:
 
@@ -493,6 +554,8 @@ php artisan test
 - критичное поведение при сбое почты;
 - rate limiting, CORS, health, metrics и документация;
 - предупреждение PHP в `bootstrap/app.php` после одного из прогонов;
+- отсутствие падения `/` без `public/build/manifest.json`;
+- production-сборка `npm run build`;
 - результаты `php artisan test`;
 - результаты `php artisan route:list`;
 - результаты `vendor/bin/pint --test`.
