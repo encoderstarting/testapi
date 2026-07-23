@@ -284,19 +284,18 @@ Frontend специально сделан простым: один Vue-комп
 
 AI анализирует только поле `comment`.
 
-Поддержаны два режима провайдера:
+Основной провайдер проекта сейчас: `gemini`.
 
-- `openai`
-- `gemini`
+Дополнительно в коде сохранена совместимость с `openai`, но базовая конфигурация, примеры и тесты ориентированы на Gemini.
 
 Конфигурация хранится в `config/services.php` и читается из `.env`.
 
 Требуемые переменные:
 
 ```env
-AI_PROVIDER=openai
+AI_PROVIDER=gemini
 AI_API_KEY=
-AI_MODEL=
+AI_MODEL=gemini-3.5-flash-lite
 AI_TIMEOUT=10
 ```
 
@@ -429,9 +428,9 @@ MAIL_FROM_ADDRESS="hello@example.com"
 MAIL_FROM_NAME="${APP_NAME}"
 OWNER_EMAIL=
 
-AI_PROVIDER=openai
+AI_PROVIDER=gemini
 AI_API_KEY=
-AI_MODEL=
+AI_MODEL=gemini-3.5-flash-lite
 AI_TIMEOUT=10
 
 FRONTEND_URL=http://localhost:3000

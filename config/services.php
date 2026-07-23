@@ -38,9 +38,9 @@ return [
     ],
 
     'ai' => [
-        'provider' => env('AI_PROVIDER', 'openai'),
+        'provider' => env('AI_PROVIDER', 'gemini'),
         'api_key' => env('AI_API_KEY', ''),
-        'model' => env('AI_MODEL', ''),
+        'model' => env('AI_MODEL', 'gemini-3.5-flash-lite'),
         'timeout' => (int) env('AI_TIMEOUT', 10),
     ],
 

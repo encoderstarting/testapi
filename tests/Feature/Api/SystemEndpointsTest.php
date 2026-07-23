@@ -14,9 +14,9 @@ final class SystemEndpointsTest extends TestCase
     {
         config([
             'contact.owner_email' => 'owner@example.com',
-            'services.ai.provider' => 'openai',
+            'services.ai.provider' => 'gemini',
             'services.ai.api_key' => 'test-key',
-            'services.ai.model' => 'gpt-4.1-mini',
+            'services.ai.model' => 'gemini-3.5-flash-lite',
             'mail.default' => 'log',
             'mail.from.address' => 'hello@example.com',
         ]);
@@ -51,9 +51,9 @@ final class SystemEndpointsTest extends TestCase
     {
         config([
             'contact.owner_email' => 'owner@example.com',
-            'services.ai.provider' => 'openai',
+            'services.ai.provider' => 'gemini',
             'services.ai.api_key' => 'test-key',
-            'services.ai.model' => 'gpt-4.1-mini',
+            'services.ai.model' => 'gemini-3.5-flash-lite',
             'services.ai.timeout' => 10,
         ]);
 
@@ -61,24 +61,32 @@ final class SystemEndpointsTest extends TestCase
 
         Http::fakeSequence()
             ->push([
-                'choices' => [
+                'candidates' => [
                     [
-                        'message' => [
-                            'content' => json_encode([
-                                'category' => 'project_request',
-                                'sentiment' => 'positive',
-                                'priority' => 'high',
-                                'summary' => 'Клиент хочет обсудить разработку интернет-магазина.',
-                            ], JSON_UNESCAPED_UNICODE),
+                        'content' => [
+                            'parts' => [
+                                [
+                                    'text' => json_encode([
+                                        'category' => 'project_request',
+                                        'sentiment' => 'positive',
+                                        'priority' => 'high',
+                                        'summary' => 'Клиент хочет обсудить разработку интернет-магазина.',
+                                    ], JSON_UNESCAPED_UNICODE),
+                                ],
+                            ],
                         ],
                     ],
                 ],
             ])
             ->push([
-                'choices' => [
+                'candidates' => [
                     [
-                        'message' => [
-                            'content' => 'not-json',
+                        'content' => [
+                            'parts' => [
+                                [
+                                    'text' => 'not-json',
+                                ],
+                            ],
                         ],
                     ],
                 ],
@@ -110,23 +118,27 @@ final class SystemEndpointsTest extends TestCase
     {
         config([
             'contact.owner_email' => 'owner@example.com',
-            'services.ai.provider' => 'openai',
+            'services.ai.provider' => 'gemini',
             'services.ai.api_key' => 'test-key',
-            'services.ai.model' => 'gpt-4.1-mini',
+            'services.ai.model' => 'gemini-3.5-flash-lite',
             'services.ai.timeout' => 10,
         ]);
 
         Http::fake([
-            'https://api.openai.com/v1/chat/completions' => Http::response([
-                'choices' => [
+            'https://generativelanguage.googleapis.com/v1beta/models/*' => Http::response([
+                'candidates' => [
                     [
-                        'message' => [
-                            'content' => json_encode([
-                                'category' => 'project_request',
-                                'sentiment' => 'positive',
-                                'priority' => 'high',
-                                'summary' => 'Клиент хочет обсудить разработку интернет-магазина.',
-                            ], JSON_UNESCAPED_UNICODE),
+                        'content' => [
+                            'parts' => [
+                                [
+                                    'text' => json_encode([
+                                        'category' => 'project_request',
+                                        'sentiment' => 'positive',
+                                        'priority' => 'high',
+                                        'summary' => 'Клиент хочет обсудить разработку интернет-магазина.',
+                                    ], JSON_UNESCAPED_UNICODE),
+                                ],
+                            ],
                         ],
                     ],
                 ],

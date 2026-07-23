@@ -42,8 +42,7 @@ final class ContactTest extends TestCase
             ]);
 
         Http::assertSent(function (Request $request): bool {
-            return $request->url() === 'https://api.openai.com/v1/chat/completions'
-                && $request->hasHeader('Authorization', ['Bearer test-key']);
+            return $request->url() === 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent?key=test-key';
         });
 
         Mail::assertSent(ContactOwnerMail::class, 1);
@@ -161,11 +160,15 @@ final class ContactTest extends TestCase
         Mail::fake();
 
         Http::fake([
-            'https://api.openai.com/v1/chat/completions' => Http::response([
-                'choices' => [
+            'https://generativelanguage.googleapis.com/v1beta/models/*' => Http::response([
+                'candidates' => [
                     [
-                        'message' => [
-                            'content' => 'not-json',
+                        'content' => [
+                            'parts' => [
+                                [
+                                    'text' => 'not-json',
+                                ],
+                            ],
                         ],
                     ],
                 ],
@@ -312,9 +315,9 @@ final class ContactTest extends TestCase
         config([
             'contact.owner_email' => 'owner@example.com',
             'cors.allowed_origins' => ['http://localhost:3000'],
-            'services.ai.provider' => 'openai',
+            'services.ai.provider' => 'gemini',
             'services.ai.api_key' => 'test-key',
-            'services.ai.model' => 'gpt-4.1-mini',
+            'services.ai.model' => 'gemini-3.5-flash-lite',
             'services.ai.timeout' => 10,
         ]);
     }
@@ -322,16 +325,20 @@ final class ContactTest extends TestCase
     private function fakeSuccessfulAiResponse(): void
     {
         Http::fake([
-            'https://api.openai.com/v1/chat/completions' => Http::response([
-                'choices' => [
+            'https://generativelanguage.googleapis.com/v1beta/models/*' => Http::response([
+                'candidates' => [
                     [
-                        'message' => [
-                            'content' => json_encode([
-                                'category' => 'project_request',
-                                'sentiment' => 'positive',
-                                'priority' => 'high',
-                                'summary' => 'Клиент хочет обсудить разработку интернет-магазина.',
-                            ], JSON_UNESCAPED_UNICODE),
+                        'content' => [
+                            'parts' => [
+                                [
+                                    'text' => json_encode([
+                                        'category' => 'project_request',
+                                        'sentiment' => 'positive',
+                                        'priority' => 'high',
+                                        'summary' => 'Клиент хочет обсудить разработку интернет-магазина.',
+                                    ], JSON_UNESCAPED_UNICODE),
+                                ],
+                            ],
                         ],
                     ],
                 ],
