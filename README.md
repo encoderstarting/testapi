@@ -562,3 +562,9 @@ php artisan test
 - результаты `php artisan test`;
 - результаты `php artisan route:list`;
 - результаты `vendor/bin/pint --test`.
+
+Отдельно вручную со стороны пользователя было исправлено и подтверждено:
+
+- основной AI-провайдер переведён на `gemini` вместо `openai`;
+- проверена локальная `.env`-конфигурация для `OWNER_EMAIL`, Gemini и SMTP;
+- через `Test-NetConnection smtp.gmail.com -Port 587` подтверждено, что `503` при отправке письма вызван не Laravel-кодом, а недоступностью Gmail SMTP из текущей сети или proxy-интерфейса `dedproxy`.

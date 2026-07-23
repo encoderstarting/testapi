@@ -43,5 +43,8 @@ return [
         'model' => env('AI_MODEL', 'gemini-3.5-flash-lite'),
         'timeout' => (int) env('AI_TIMEOUT', 10),
     ],
+    'contact' => [
+        'owner_email' => env('OWNER_EMAIL'),
+    ],
 
 ];
