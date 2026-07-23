@@ -8,6 +8,7 @@ use App\Mail\ContactOwnerMail;
 use App\Mail\ContactUserMail;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use RuntimeException;
 use Tests\TestCase;
@@ -229,10 +230,88 @@ final class ContactTest extends TestCase
             ]);
     }
 
+    public function test_it_returns_too_many_requests_after_five_requests(): void
+    {
+        $this->configureAi();
+        $this->fakeSuccessfulAiResponse();
+        Mail::fake();
+
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $this->postJson('/api/contact', [
+                'name' => 'Никита',
+                'phone' => '+79999999999',
+                'email' => 'nikita@example.com',
+                'comment' => 'Хочу обсудить разработку интернет-магазина.',
+            ])->assertCreated();
+        }
+
+        $response = $this->postJson('/api/contact', [
+            'name' => 'Никита',
+            'phone' => '+79999999999',
+            'email' => 'nikita@example.com',
+            'comment' => 'Хочу обсудить разработку интернет-магазина.',
+        ]);
+
+        $response
+            ->assertStatus(429)
+            ->assertJson([
+                'success' => false,
+                'message' => 'Слишком много запросов. Попробуйте позже.',
+            ]);
+    }
+
+    public function test_it_applies_cors_headers_for_allowed_frontend_origin(): void
+    {
+        $this->configureAi();
+        $this->fakeSuccessfulAiResponse();
+        Mail::fake();
+
+        $response = $this->withHeaders([
+            'Origin' => 'http://localhost:3000',
+        ])->postJson('/api/contact', [
+            'name' => 'Никита',
+            'phone' => '+79999999999',
+            'email' => 'nikita@example.com',
+            'comment' => 'Хочу обсудить разработку интернет-магазина.',
+        ]);
+
+        $response
+            ->assertCreated()
+            ->assertHeader('Access-Control-Allow-Origin', 'http://localhost:3000');
+    }
+
+    public function test_it_logs_contact_request_start_and_completion(): void
+    {
+        $this->configureAi();
+        $this->fakeSuccessfulAiResponse();
+        Mail::fake();
+        Log::spy();
+
+        $this->postJson('/api/contact', [
+            'name' => 'Никита',
+            'phone' => '+79999999999',
+            'email' => 'nikita@example.com',
+            'comment' => 'Хочу обсудить разработку интернет-магазина.',
+        ])->assertCreated();
+
+        Log::shouldHaveReceived('info')->withArgs(function (string $message, array $context): bool {
+            return $message === 'Contact request started.'
+                && $context['path'] === 'api/contact';
+        })->once();
+
+        Log::shouldHaveReceived('info')->withArgs(function (string $message, array $context): bool {
+            return $message === 'Contact request completed.'
+                && $context['path'] === 'api/contact'
+                && $context['status'] === 201
+                && array_key_exists('duration_ms', $context);
+        })->once();
+    }
+
     private function configureAi(): void
     {
         config([
             'contact.owner_email' => 'owner@example.com',
+            'cors.allowed_origins' => ['http://localhost:3000'],
             'services.ai.provider' => 'openai',
             'services.ai.api_key' => 'test-key',
             'services.ai.model' => 'gpt-4.1-mini',
