@@ -387,10 +387,15 @@ AI_TIMEOUT=10
 Разрешён только origin из:
 
 ```env
-FRONTEND_URL=http://localhost:3000
+FRONTEND_URL=https://your-frontend-domain.example
 ```
 
 Конфигурация находится в `config/cors.php` и применяется только к `api/*`.
+
+Для production на Railway не используется wildcard `*`. Нужно указывать точный frontend origin:
+
+- если frontend и API живут в одном Laravel-сервисе, можно поставить `FRONTEND_URL` равным `APP_URL`;
+- если frontend размещён отдельно, укажите его полный `https://` origin без завершающего `/`.
 
 ## Метрики
 
@@ -418,6 +423,13 @@ storage/app/metrics/contact-ai-api.json
 Сейчас для этапов 1–6 нужны минимум:
 
 ```env
+APP_ENV=production
+APP_DEBUG=false
+APP_URL=https://your-service.up.railway.app
+
+LOG_CHANNEL=stderr
+LOG_STACK=stderr
+
 MAIL_MAILER=log
 MAIL_HOST=127.0.0.1
 MAIL_PORT=2525
@@ -433,7 +445,12 @@ AI_API_KEY=
 AI_MODEL=gemini-3.5-flash-lite
 AI_TIMEOUT=10
 
-FRONTEND_URL=http://localhost:3000
+SESSION_DRIVER=file
+SESSION_SECURE_COOKIE=true
+CACHE_STORE=file
+QUEUE_CONNECTION=sync
+
+FRONTEND_URL=https://your-frontend-domain.example
 ```
 
 Новых переменных для Swagger/OpenAPI не требуется.
@@ -444,6 +461,8 @@ FRONTEND_URL=http://localhost:3000
 - `FRONTEND_URL=http://127.0.0.1:8000`
 
 Примечание: текущий Laravel-конфиг использует `MAIL_SCHEME`, но для совместимости с заданием в конфигурации также поддержан `MAIL_ENCRYPTION`.
+
+Для Railway переменная `PORT` приходит автоматически от платформы и вручную в `.env.example` не добавляется.
 
 ## Установка и запуск
 
@@ -522,6 +541,57 @@ php artisan test
 5. Проверить запись в каталог `storage/app/metrics`
 6. Прогнать `php artisan test`
 
+### Railway
+
+Проект подготовлен к деплою на Railway без Docker, без отдельной базы и без Redis:
+
+- Railway по официальной документации автоматически детектирует Laravel и запускает его через `php-fpm` и `Caddy`;
+- в [railway.json](/E:/project/contact-ai-api/railway.json:1) добавлен healthcheck на `/api/health`;
+- приложение доверяет reverse proxy заголовкам в [bootstrap/app.php](/E:/project/contact-ai-api/bootstrap/app.php:1), поэтому корректно работает за HTTPS-терминацией Railway;
+- production defaults в [.env.example](/E:/project/contact-ai-api/.env.example:1) переведены на `APP_ENV=production`, `APP_DEBUG=false`, `LOG_CHANNEL=stderr`, `SESSION_DRIVER=file`, `CACHE_STORE=file`, `QUEUE_CONNECTION=sync`.
+
+Рекомендуемые Railway variables:
+
+- `APP_KEY`
+- `APP_ENV=production`
+- `APP_DEBUG=false`
+- `APP_URL=https://<your-domain-or-up-railway-app>`
+- `FRONTEND_URL=https://<your-frontend-origin>`
+- `LOG_CHANNEL=stderr`
+- `LOG_STACK=stderr`
+- `OWNER_EMAIL`
+- `AI_PROVIDER=gemini`
+- `AI_API_KEY`
+- `AI_MODEL=gemini-3.5-flash-lite`
+- `AI_TIMEOUT=10`
+- `MAIL_MAILER`
+- `MAIL_SCHEME`
+- `MAIL_HOST`
+- `MAIL_PORT`
+- `MAIL_USERNAME`
+- `MAIL_PASSWORD`
+- `MAIL_FROM_ADDRESS`
+- `MAIL_FROM_NAME`
+- `SESSION_DRIVER=file`
+- `SESSION_SECURE_COOKIE=true`
+- `CACHE_STORE=file`
+- `QUEUE_CONNECTION=sync`
+
+Порядок настройки в Railway:
+
+1. Создать сервис из GitHub-репозитория.
+2. Сгенерировать публичный Railway domain в Networking.
+3. Добавить production variables из списка выше.
+4. Убедиться, что `APP_URL` совпадает с публичным доменом сервиса.
+5. Убедиться, что `FRONTEND_URL` совпадает с origin фронтенда.
+6. После первого деплоя проверить `GET /api/health`, `GET /api/documentation` и `GET /api/openapi.json`.
+
+Известные ограничения Railway-подготовки:
+
+- файловая система Railway эфемерная, поэтому file-based cache/session подходят, но не являются постоянным хранилищем между пересозданиями инстанса;
+- метрики в `storage/app/metrics` тоже эфемерны и будут сбрасываться при полном пересоздании контейнера;
+- если Swagger CDN недоступен из браузера клиента, `/api/openapi.json` всё равно останется рабочим.
+
 ## Что ещё не сделано
 
 Следующий этап задания пока не реализован:
@@ -559,6 +629,8 @@ php artisan test
 - предупреждение PHP в `bootstrap/app.php` после одного из прогонов;
 - отсутствие падения `/` без `public/build/manifest.json`;
 - production-сборка `npm run build`;
+- `GET /api/health` в production-конфигурации;
+- Swagger UI за HTTPS reverse proxy;
 - результаты `php artisan test`;
 - результаты `php artisan route:list`;
 - результаты `vendor/bin/pint --test`.

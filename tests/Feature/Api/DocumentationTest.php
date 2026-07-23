@@ -31,4 +31,17 @@ final class DocumentationTest extends TestCase
             ->assertSee('swagger-ui', false)
             ->assertSee('SwaggerUIBundle', false);
     }
+
+    public function test_documentation_page_uses_https_url_behind_trusted_proxy(): void
+    {
+        $response = $this->withHeaders([
+            'X-Forwarded-Proto' => 'https',
+            'X-Forwarded-Host' => 'contact-api.up.railway.app',
+            'X-Forwarded-Port' => '443',
+        ])->get('/api/documentation');
+
+        $response
+            ->assertOk()
+            ->assertSee('https:\\/\\/contact-api.up.railway.app\\/api\\/openapi.json', false);
+    }
 }

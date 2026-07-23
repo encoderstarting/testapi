@@ -176,4 +176,23 @@ final class SystemEndpointsTest extends TestCase
                 'ai_fallbacks' => 0,
             ]);
     }
+
+    public function test_health_endpoint_remains_available_in_production_configuration(): void
+    {
+        config([
+            'app.env' => 'production',
+            'app.debug' => false,
+            'contact.owner_email' => 'owner@example.com',
+            'services.ai.provider' => 'gemini',
+            'services.ai.api_key' => 'test-key',
+            'services.ai.model' => 'gemini-3.5-flash-lite',
+            'mail.default' => 'log',
+            'mail.from.address' => 'hello@example.com',
+        ]);
+
+        $this->getJson('/api/health')
+            ->assertOk()
+            ->assertJsonPath('status', 'ok')
+            ->assertJsonPath('services.application', 'available');
+    }
 }
