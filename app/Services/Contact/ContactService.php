@@ -10,6 +10,7 @@ use App\Exceptions\ContactMailException;
 use App\Mail\ContactOwnerMail;
 use App\Mail\ContactUserMail;
 use App\Services\Ai\AiServiceInterface;
+use App\Services\Metrics\MetricsService;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Mail;
 use Throwable;
@@ -18,13 +19,28 @@ final class ContactService
 {
     public function __construct(
         private readonly AiServiceInterface $aiService,
+        private readonly MetricsService $metricsService,
     ) {}
 
     public function handle(ContactData $contactData): AiAnalysisResult
     {
+        $this->metricsService->incrementTotalRequests();
+
         $analysisResult = $this->analyzeComment($contactData);
 
-        $this->sendNotifications($contactData, $analysisResult);
+        if (! $analysisResult->processedByAi) {
+            $this->metricsService->incrementAiFallbacks();
+        }
+
+        try {
+            $this->sendNotifications($contactData, $analysisResult);
+        } catch (Throwable $exception) {
+            $this->metricsService->incrementFailedRequests();
+
+            throw $exception;
+        }
+
+        $this->metricsService->incrementSuccessfulRequests();
 
         return $analysisResult;
     }

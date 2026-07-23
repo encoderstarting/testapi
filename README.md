@@ -13,14 +13,15 @@ Backend API для формы обратной связи на Laravel.
 - включён rate limiting `5` запросов в минуту на IP;
 - добавлено логирование начала и завершения запроса;
 - настроен CORS для `FRONTEND_URL`;
-- написаны feature-тесты для валидации, AI, почты, rate limiting и CORS.
+- реализованы `GET /api/health` и `GET /api/metrics`;
+- метрики хранятся в JSON-файле с блокировкой записи;
+- написаны feature-тесты для валидации, AI, почты, rate limiting, CORS, health и metrics.
 
 Пока не реализованы:
 
-- `GET /api/health`;
-- `GET /api/metrics`;
 - Swagger/OpenAPI;
-- хранение и выдача метрик.
+- curl-примеры;
+- финальная деплойная проверка.
 
 ## Текущий стек
 
@@ -47,11 +48,17 @@ Route
   -> AiServiceInterface
   -> HttpAiService
   -> Laravel Mail
+  -> MetricsService
 ```
 
-Контроллер остаётся тонким: он принимает запрос, создаёт DTO, вызывает сервис и возвращает JSON.
+Дополнительные endpoint:
 
-## Endpoint
+- `GET /api/health`
+- `GET /api/metrics`
+
+Контроллеры остаются тонкими: принимают запрос, вызывают нужный сервис и возвращают JSON.
+
+## Endpoints
 
 ### `POST /api/contact`
 
@@ -119,6 +126,37 @@ Route
 {
   "success": false,
   "message": "Произошла внутренняя ошибка."
+}
+```
+
+### `GET /api/health`
+
+Ответ:
+
+```json
+{
+  "status": "ok",
+  "timestamp": "2026-07-23T12:00:00+00:00",
+  "services": {
+    "application": "available",
+    "ai": "configured",
+    "mail": "configured"
+  }
+}
+```
+
+Endpoint не отправляет реальные письма и не делает AI-запрос.
+
+### `GET /api/metrics`
+
+Ответ:
+
+```json
+{
+  "total_requests": 10,
+  "successful_requests": 8,
+  "failed_requests": 2,
+  "ai_fallbacks": 1
 }
 ```
 
@@ -190,7 +228,7 @@ AI_TIMEOUT=10
 }
 ```
 
-При fallback сервис пишет предупреждение в лог и маскирует email/телефон.
+При fallback сервис пишет предупреждение в лог и увеличивает `ai_fallbacks` в метриках.
 
 ## Почта
 
@@ -239,9 +277,30 @@ FRONTEND_URL=http://localhost:3000
 
 Конфигурация находится в `config/cors.php` и применяется только к `api/*`.
 
+## Метрики
+
+Метрики хранятся в JSON-файле, путь задаётся в `config/metrics.php`.
+
+По умолчанию используется:
+
+```text
+storage/app/metrics/contact-ai-api.json
+```
+
+При записи используется блокировка файла, чтобы параллельные запросы не повредили данные.
+
+Сейчас считаются:
+
+- `total_requests`
+- `successful_requests`
+- `failed_requests`
+- `ai_fallbacks`
+
+Примечание: на текущем этапе эти счётчики обновляются для запросов, которые дошли до бизнес-обработки `ContactService`. Ошибки валидации и срабатывание rate limit в метрики запроса не включаются.
+
 ## Переменные окружения
 
-Сейчас для этапов 1–4 нужны минимум:
+Сейчас для этапов 1–5 нужны минимум:
 
 ```env
 MAIL_MAILER=log
@@ -307,7 +366,10 @@ php artisan test
 - `503` при сбое почтового сервиса;
 - `429` при превышении лимита;
 - CORS-заголовки для разрешённого origin;
-- логирование начала и завершения запроса.
+- логирование начала и завершения запроса;
+- `GET /api/health`;
+- `GET /api/metrics`;
+- обновление метрик после успешных и неуспешных обращений.
 
 В тестах реальные HTTP- и SMTP-запросы не выполняются: используются `Http::fake()` и `Mail::fake()`.
 
@@ -315,11 +377,8 @@ php artisan test
 
 Следующие этапы задания пока не реализованы:
 
-- `GET /api/health`;
-- `GET /api/metrics`;
-- хранение метрик;
 - Swagger/OpenAPI-документация;
-- curl-примеры для всех конечных точек;
+- curl-примеры для конечных точек;
 - финальная проверка деплойного состояния.
 
 ## Использование AI при разработке
@@ -339,7 +398,7 @@ php artisan test
 - структура сервисного слоя;
 - поведение fallback;
 - критичное поведение при сбое почты;
-- rate limiting и CORS;
+- rate limiting, CORS, health и metrics;
 - результаты `php artisan test`;
 - результаты `php artisan route:list`;
 - результаты `vendor/bin/pint --test`.
