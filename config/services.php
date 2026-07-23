@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 return [
 
     /*
@@ -33,6 +35,13 @@ return [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),
             'channel' => env('SLACK_BOT_USER_DEFAULT_CHANNEL'),
         ],
+    ],
+
+    'ai' => [
+        'provider' => env('AI_PROVIDER', 'openai'),
+        'api_key' => env('AI_API_KEY', ''),
+        'model' => env('AI_MODEL', ''),
+        'timeout' => (int) env('AI_TIMEOUT', 10),
     ],
 
 ];

@@ -1,58 +1,212 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Contact AI API
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Backend API для формы обратной связи на Laravel.
 
-## About Laravel
+Текущий статус репозитория:
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- реализован `POST /api/contact`;
+- работает валидация входных данных;
+- подключён AI-анализ комментария;
+- реализован graceful fallback при ошибке AI;
+- написаны feature-тесты для валидации, успешного AI-анализа и fallback.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+Пока не реализованы:
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+- отправка писем;
+- `GET /api/health`;
+- `GET /api/metrics`;
+- rate limiting;
+- Swagger/OpenAPI.
 
-## Learning Laravel
+## Текущий стек
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
+- PHP `^8.3` по текущему `composer.json`
+- Laravel `^13.8` по текущему `composer.json`
+- Laravel HTTP Client
+- PHPUnit
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+Задание в [TASK.md](/TASK.md) описывает целевой стек как Laravel 12 / PHP 8.4, но текущая кодовая база на момент реализации уже была создана на Laravel 13.8 и PHP ^8.3. Изменения вносились поверх существующего состояния репозитория.
 
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
+## Архитектура текущей реализации
 
-## Agentic Development
+Для `POST /api/contact` сейчас используется цепочка:
 
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
-
-```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+```text
+Route
+  -> StoreContactRequest
+  -> ContactController
+  -> ContactData DTO
+  -> ContactService
+  -> AiServiceInterface
+  -> HttpAiService
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Контроллер остаётся тонким: он принимает запрос, создаёт DTO, вызывает сервис и возвращает JSON.
 
-## Contributing
+## Endpoint
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+### `POST /api/contact`
 
-## Code of Conduct
+Принимает JSON:
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+```json
+{
+  "name": "Никита",
+  "phone": "+79999999999",
+  "email": "nikita@example.com",
+  "comment": "Хочу обсудить разработку интернет-магазина"
+}
+```
 
-## Security Vulnerabilities
+Успешный ответ:
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+```json
+{
+  "success": true,
+  "message": "Обращение успешно отправлено.",
+  "data": {
+    "category": "project_request",
+    "sentiment": "positive",
+    "priority": "high",
+    "processed_by_ai": true
+  }
+}
+```
 
-## License
+Ошибка валидации:
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+```json
+{
+  "success": false,
+  "message": "Данные не прошли проверку.",
+  "errors": {
+    "email": [
+      "Укажите корректный email."
+    ]
+  }
+}
+```
+
+## Валидация
+
+Используется `StoreContactRequest`.
+
+Проверяются:
+
+- `name`: от 2 до 100 символов
+- `phone`: от 7 до 20 символов, только цифры, пробелы, скобки, дефисы и `+`
+- `email`: корректный email, максимум 255 символов
+- `comment`: от 10 до 3000 символов
+
+Сообщения валидации возвращаются на русском языке.
+
+## AI-интеграция
+
+На этапе 2 AI анализирует только поле `comment`.
+
+Поддержаны два режима провайдера:
+
+- `openai`
+- `gemini`
+
+Конфигурация хранится в `config/services.php` и читается из `.env`.
+
+Требуемые переменные:
+
+```env
+AI_PROVIDER=openai
+AI_API_KEY=
+AI_MODEL=
+AI_TIMEOUT=10
+```
+
+Промпт ограничивает модель жёстким JSON-форматом:
+
+```json
+{
+  "category": "project_request|support|cooperation|question|other",
+  "sentiment": "positive|neutral|negative",
+  "priority": "low|medium|high",
+  "summary": "Краткое описание обращения до 150 символов"
+}
+```
+
+Сервис валидирует AI-ответ:
+
+- ответ не должен быть пустым;
+- ответ должен быть корректным JSON;
+- должны присутствовать `category`, `sentiment`, `priority`, `summary`;
+- значения должны входить в разрешённые списки;
+- `summary` не должен превышать 150 символов.
+
+## Fallback
+
+Если AI не настроен, возвращает пустой ответ, выдаёт невалидный JSON или отвечает ошибкой, запрос не падает.
+
+Вместо этого используется fallback:
+
+```json
+{
+  "category": "other",
+  "sentiment": "neutral",
+  "priority": "medium",
+  "summary": "Первые 150 символов комментария",
+  "processed_by_ai": false
+}
+```
+
+При fallback сервис пишет предупреждение в лог и маскирует email/телефон.
+
+## Установка и запуск
+
+1. Установить зависимости:
+
+```bash
+composer install
+```
+
+2. Создать `.env`:
+
+```bash
+copy .env.example .env
+```
+
+3. Сгенерировать ключ приложения:
+
+```bash
+php artisan key:generate
+```
+
+4. При необходимости настроить AI-переменные в `.env`.
+
+5. Запустить тесты:
+
+```bash
+php artisan test
+```
+
+## Тесты
+
+Сейчас покрыты:
+
+- успешный запрос с корректным AI-ответом;
+- пустые обязательные поля;
+- неправильный email;
+- неправильный телефон;
+- слишком короткий комментарий;
+- fallback при невалидном AI-ответе.
+
+В тестах реальные HTTP-запросы не выполняются: используется `Http::fake()`.
+
+## Использование AI при разработке
+
+При разработке использовался Codex.
+
+С помощью AI были подготовлены:
+
+- базовая структура endpoint;
+- DTO и сервисы;
+- тестовые сценарии;
+- черновая документация.
+
+После генерации код проверялся вручную, запускался локально и исправлялся по результатам `php artisan test`, `php artisan route:list` и `vendor/bin/pint --test`.
